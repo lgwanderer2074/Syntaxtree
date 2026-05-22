@@ -167,8 +167,12 @@ textarea:focus {
   fill: var(--node-bg);
   stroke: var(--accent);
   stroke-width: 2px;
-  cursor: pointer;
+  cursor: grab;
   transition: fill 0.2s, stroke 0.2s;
+}
+
+.node circle:active, .node rect:active {
+  cursor: grabbing;
 }
 
 .node:hover circle, .node:hover rect {
