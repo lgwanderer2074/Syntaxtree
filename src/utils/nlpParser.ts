@@ -14,7 +14,7 @@ export function generateTreeFromSentence(text: string): TreeNode {
   
   const children: TreeNode[] = [];
   
-  terms.forEach((termObj: any, index: number) => {
+  terms.forEach((termObj: any) => {
     const term = termObj.terms[0];
     const tags = term.tags || [];
     

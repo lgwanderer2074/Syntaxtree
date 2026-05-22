@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { TreeVisualizer } from './components/TreeVisualizer';
 import { generateTreeFromSentence, generateId, type TreeNode } from './utils/nlpParser';
 import { Download, Share2, Type, Plus, Trash2 } from 'lucide-react';
@@ -88,7 +88,7 @@ function App() {
       <main className="main-content">
         <aside className="sidebar">
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-            {items.map((item, index) => (
+            {items.map((item) => (
               <div key={item.id} className="input-group">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flex: 1 }}>
