@@ -1,0 +1,260 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  --bg-color: #0f1115;
+  --panel-bg: rgba(255, 255, 255, 0.03);
+  --panel-border: rgba(255, 255, 255, 0.08);
+  --text-main: #e2e8f0;
+  --text-muted: #94a3b8;
+  --accent: #6366f1;
+  --accent-hover: #4f46e5;
+  --node-bg: #1e293b;
+  --node-border: #334155;
+  --line-color: #475569;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--bg-color);
+  color: var(--text-main);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+}
+
+/* App Layout */
+.app-header {
+  padding: 1.5rem 2rem;
+  border-bottom: 1px solid var(--panel-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(15, 17, 21, 0.8);
+  backdrop-filter: blur(12px);
+  z-index: 10;
+}
+
+.app-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #fff;
+}
+
+.app-title svg {
+  color: var(--accent);
+}
+
+.main-content {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Sidebar / Editor */
+.sidebar {
+  width: 350px;
+  background: var(--panel-bg);
+  border-right: 1px solid var(--panel-border);
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem;
+  gap: 1.5rem;
+  overflow-y: auto;
+}
+
+.input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.input-group label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+textarea {
+  width: 100%;
+  min-height: 120px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 1rem;
+  color: var(--text-main);
+  font-family: 'Inter', sans-serif;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  resize: vertical;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+.hint {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.primary-btn {
+  background: var(--accent);
+  color: white;
+  border: none;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: background 0.2s;
+}
+
+.primary-btn:hover {
+  background: var(--accent-hover);
+}
+
+/* Workspace / Tree Area */
+.workspace {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at center, #1a1d24 0%, var(--bg-color) 100%);
+}
+
+.tree-container {
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+}
+
+.tree-container:active {
+  cursor: grabbing;
+}
+
+/* SVG Tree Styles */
+.link {
+  fill: none;
+  stroke: var(--line-color);
+  stroke-width: 2px;
+}
+
+.node circle {
+  fill: var(--node-bg);
+  stroke: var(--accent);
+  stroke-width: 2px;
+  cursor: pointer;
+  transition: fill 0.2s, stroke 0.2s;
+}
+
+.node:hover circle {
+  fill: var(--accent);
+}
+
+.node text {
+  font-size: 14px;
+  font-weight: 500;
+  fill: var(--text-main);
+  pointer-events: none;
+}
+
+.node-leaf text {
+  font-size: 16px;
+  font-weight: 600;
+  fill: #fff;
+}
+
+.node-group {
+  cursor: pointer;
+}
+
+/* Modal / Edit Node */
+.edit-modal-backdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+.edit-modal {
+  background: #1e293b;
+  border: 1px solid var(--panel-border);
+  padding: 1.5rem;
+  border-radius: 12px;
+  width: 300px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.edit-modal h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.edit-modal input {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 0.75rem;
+  color: white;
+  font-size: 1rem;
+}
+
+.edit-modal input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.modal-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.secondary-btn {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--panel-border);
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.secondary-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: white;
+}
