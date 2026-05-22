@@ -55,10 +55,28 @@ export const TreeVisualizer: React.FC<TreeVisualizerProps> = ({ data, onNodeClic
               }}
             >
               {!isLeaf ? (
-                <>
-                  <circle r={22} />
-                  <text dy={5} textAnchor="middle">{node.data.name}</text>
-                </>
+                (() => {
+                  const textLength = node.data.name.length;
+                  // Base diameter is 44 (for short tags like S, N, V).
+                  // For longer tags, dynamically calculate width with padding.
+                  const nodeWidth = Math.max(44, textLength * 9 + 18);
+                  const nodeHeight = 44;
+                  const rx = nodeHeight / 2;
+                  
+                  return (
+                    <>
+                      <rect 
+                        x={-nodeWidth / 2} 
+                        y={-nodeHeight / 2} 
+                        width={nodeWidth} 
+                        height={nodeHeight} 
+                        rx={rx} 
+                        ry={rx}
+                      />
+                      <text dy={5} textAnchor="middle">{node.data.name}</text>
+                    </>
+                  );
+                })()
               ) : (
                 <text y={25} textAnchor="middle">{node.data.name}</text>
               )}
