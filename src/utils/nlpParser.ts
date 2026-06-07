@@ -27,6 +27,7 @@ const COMMON_PREPOSITIONS = new Set([
 function getPos(tags: string[], word?: string): Tag {
   if (word && COMMON_PREPOSITIONS.has(word.toLowerCase())) return 'P';
   // Order matters: more specific roles are checked before generic ones.
+  if (tags.includes('Copula')) return 'V'; // is/are/was as the main (copular) verb
   if (tags.includes('Modal') || tags.includes('Auxiliary')) return 'Aux';
   if (tags.includes('Determiner') || tags.includes('Article')) return 'Det';
   if (tags.includes('Pronoun')) return 'Pro';
@@ -39,17 +40,42 @@ function getPos(tags: string[], word?: string): Tag {
   return 'X';
 }
 
-function leaf(token: Token): TreeNode {
-  // A terminal: the part-of-speech node with the word as its single child.
-  return {
-    id: generateId(),
-    name: token.pos,
-    children: [{ id: generateId(), name: token.word }],
-  };
+// ---------------------------------------------------------------------------
+// X-bar node builders. Every phrase XP projects an intermediate X' bar level,
+// and every head X dominates the actual word (a childless leaf node).
+// ---------------------------------------------------------------------------
+
+function n(name: string, children: TreeNode[]): TreeNode {
+  return { id: generateId(), name, children };
 }
 
-function phrase(name: string, children: TreeNode[]): TreeNode {
-  return { id: generateId(), name, children };
+function word(w: string): TreeNode {
+  return { id: generateId(), name: w }; // terminal / leaf
+}
+
+function head(label: string, w: string): TreeNode {
+  return { id: generateId(), name: label, children: [word(w)] };
+}
+
+function buildAdjP(w: string): TreeNode {
+  return n('AdjP', [n("Adj'", [head('Adj', w)])]);
+}
+
+function buildAdvP(w: string): TreeNode {
+  return n('AdvP', [n("Adv'", [head('Adv', w)])]);
+}
+
+// N' with the head noun innermost; noun-noun compounds and pre-modifiers
+// (AdjP/AdvP) stack as adjuncts, outermost = leftmost in the sentence.
+function buildNbar(modifiers: TreeNode[], nounWords: string[]): TreeNode {
+  let nbar = n("N'", [head('N', nounWords[nounWords.length - 1])]);
+  for (let k = nounWords.length - 2; k >= 0; k--) {
+    nbar = n("N'", [head('N', nounWords[k]), nbar]); // compound noun adjunct
+  }
+  for (let k = modifiers.length - 1; k >= 0; k--) {
+    nbar = n("N'", [modifiers[k], nbar]);
+  }
+  return nbar;
 }
 
 interface Chunk {
@@ -57,110 +83,142 @@ interface Chunk {
   next: number;
 }
 
-// Noun phrase: (Det)? (Adv? Adj)* (N)+ , or a standalone Pronoun.
-function parseNP(tokens: Token[], i: number): Chunk | null {
-  // A pronoun forms a complete NP on its own.
+// A nominal: a DP (with a D head taking an NP complement) when there is a
+// determiner, a DP headed by a pronoun, or a bare NP otherwise.
+function parseNominal(tokens: Token[], i: number): Chunk | null {
   if (tokens[i] && tokens[i].pos === 'Pro') {
-    return { node: phrase('NP', [leaf(tokens[i])]), next: i + 1 };
+    return { node: n('DP', [n("D'", [head('D', tokens[i].word)])]), next: i + 1 };
   }
 
-  const start = i;
-  const children: TreeNode[] = [];
-
+  let detWord: string | null = null;
   if (tokens[i] && tokens[i].pos === 'Det') {
-    children.push(leaf(tokens[i]));
+    detWord = tokens[i].word;
     i++;
   }
 
-  // Adjectives, plus adverbs that modify a following adjective/adverb.
+  const modifiers: TreeNode[] = [];
   while (tokens[i]) {
     if (tokens[i].pos === 'Adj') {
-      children.push(leaf(tokens[i]));
+      modifiers.push(buildAdjP(tokens[i].word));
       i++;
     } else if (
       tokens[i].pos === 'Adv' &&
       tokens[i + 1] &&
       (tokens[i + 1].pos === 'Adj' || tokens[i + 1].pos === 'Adv')
     ) {
-      children.push(leaf(tokens[i]));
+      modifiers.push(buildAdvP(tokens[i].word));
       i++;
     } else {
       break;
     }
   }
 
-  let hasNoun = false;
+  const nounWords: string[] = [];
   while (tokens[i] && tokens[i].pos === 'N') {
-    children.push(leaf(tokens[i]));
-    i++;
-    hasNoun = true;
-  }
-
-  // Only a real NP if we found a noun, or at least a determiner/adjective head.
-  if (!hasNoun && i === start) return null;
-
-  return { node: phrase('NP', children), next: i };
-}
-
-// Prepositional phrase: P followed by an NP complement.
-function parsePP(tokens: Token[], i: number): Chunk | null {
-  if (!tokens[i] || tokens[i].pos !== 'P') return null;
-  const children: TreeNode[] = [leaf(tokens[i])];
-  const np = parseNP(tokens, i + 1);
-  if (np) {
-    children.push(np.node);
-    return { node: phrase('PP', children), next: np.next };
-  }
-  return { node: phrase('PP', children), next: i + 1 };
-}
-
-// Verb phrase: (Aux)* (Adv)* V (NP | PP | Adv | ...)* — the predicate.
-function parseVP(tokens: Token[], i: number): Chunk | null {
-  const children: TreeNode[] = [];
-
-  while (tokens[i] && tokens[i].pos === 'Aux') {
-    children.push(leaf(tokens[i]));
-    i++;
-  }
-  while (tokens[i] && tokens[i].pos === 'Adv') {
-    children.push(leaf(tokens[i]));
+    nounWords.push(tokens[i].word);
     i++;
   }
 
-  if (tokens[i] && tokens[i].pos === 'V') {
-    children.push(leaf(tokens[i]));
-    i++;
-  } else if (children.length === 0) {
+  if (nounWords.length === 0) {
+    // A lone determiner still heads a DP; otherwise this isn't a nominal.
+    if (detWord) {
+      return { node: n('DP', [n("D'", [head('D', detWord)])]), next: i };
+    }
     return null;
   }
 
-  // Complements and adjuncts following the verb.
+  const np = n('NP', [buildNbar(modifiers, nounWords)]);
+  if (detWord) {
+    return { node: n('DP', [n("D'", [head('D', detWord), np])]), next: i };
+  }
+  return { node: np, next: i };
+}
+
+// PP -> P' -> P (DP complement).
+function parsePP(tokens: Token[], i: number): Chunk {
+  const p = tokens[i].word;
+  i++;
+  const pbarChildren: TreeNode[] = [head('P', p)];
+  const comp = parseNominal(tokens, i);
+  if (comp) {
+    pbarChildren.push(comp.node);
+    i = comp.next;
+  }
+  return { node: n('PP', [n("P'", pbarChildren)]), next: i };
+}
+
+interface VPChunk {
+  node: TreeNode;
+  tWord: string | null; // auxiliary/modal that heads T
+  next: number;
+}
+
+// VP -> V' -> V (complements). Auxiliaries surface in T; pre-verbal adverbs
+// stack as V' adjuncts.
+function parseVP(tokens: Token[], i: number): VPChunk | null {
+  const auxes: string[] = [];
+  while (tokens[i] && tokens[i].pos === 'Aux') {
+    auxes.push(tokens[i].word);
+    i++;
+  }
+
+  const preAdvs: TreeNode[] = [];
+  while (tokens[i] && tokens[i].pos === 'Adv') {
+    preAdvs.push(buildAdvP(tokens[i].word));
+    i++;
+  }
+
+  let verbWord: string | null = null;
+  if (tokens[i] && tokens[i].pos === 'V') {
+    verbWord = tokens[i].word;
+    i++;
+  }
+
+  if (!verbWord && auxes.length === 0) return null;
+
+  // First aux becomes T; any extra auxes sit inside the VP.
+  const tWord = auxes.length ? auxes[0] : null;
+  const extraAux = auxes.slice(1).map((w) => head('Aux', w));
+
+  const comps: TreeNode[] = [];
   while (i < tokens.length) {
     const pos = tokens[i].pos;
     if (pos === 'P') {
-      const pp = parsePP(tokens, i)!;
-      children.push(pp.node);
+      const pp = parsePP(tokens, i);
+      comps.push(pp.node);
       i = pp.next;
     } else if (pos === 'Det' || pos === 'N' || pos === 'Pro' || pos === 'Adj') {
-      const np = parseNP(tokens, i);
-      if (np && np.next > i) {
-        children.push(np.node);
-        i = np.next;
+      const nm = parseNominal(tokens, i);
+      if (nm && nm.next > i) {
+        comps.push(nm.node);
+        i = nm.next;
       } else {
-        children.push(leaf(tokens[i]));
+        comps.push(head(tokens[i].pos, tokens[i].word));
         i++;
       }
+    } else if (pos === 'Adv') {
+      comps.push(buildAdvP(tokens[i].word));
+      i++;
     } else {
-      children.push(leaf(tokens[i]));
+      comps.push(head(tokens[i].pos, tokens[i].word));
       i++;
     }
   }
 
-  return { node: phrase('VP', children), next: i };
+  const vbarChildren: TreeNode[] = [...extraAux];
+  if (verbWord) vbarChildren.push(head('V', verbWord));
+  vbarChildren.push(...comps);
+
+  let vbar = n("V'", vbarChildren);
+  for (let k = preAdvs.length - 1; k >= 0; k--) {
+    vbar = n("V'", [preAdvs[k], vbar]);
+  }
+
+  return { node: n('VP', [vbar]), tWord, next: i };
 }
 
 export function generateTreeFromSentence(text: string): TreeNode {
-  if (!text.trim()) return { id: 'root', name: 'S' };
+  if (!text.trim()) return { id: 'root', name: 'TP' };
 
   const doc = nlp(text);
   const termsJson = doc.terms().json();
@@ -173,32 +231,66 @@ export function generateTreeFromSentence(text: string): TreeNode {
     })
     .filter((t: Token | null): t is Token => t !== null);
 
-  if (tokens.length === 0) return { id: 'root', name: 'S' };
+  if (tokens.length === 0) return { id: 'root', name: 'TP' };
 
-  const children: TreeNode[] = [];
-  let i = 0;
+  // compromise sometimes tags a clause's only verb as a plural noun
+  // (e.g. "fox jumps"). If nothing is verbal but there are at least two
+  // nouns, promote the last noun to the main verb so the clause has a predicate.
+  const hasVerbal = tokens.some((t) => t.pos === 'V' || t.pos === 'Aux');
+  if (!hasVerbal) {
+    const nounIndexes = tokens
+      .map((t, idx) => (t.pos === 'N' ? idx : -1))
+      .filter((idx) => idx >= 0);
+    if (nounIndexes.length >= 2) {
+      tokens[nounIndexes[nounIndexes.length - 1]].pos = 'V';
+    }
+  }
 
-  // Subject NP.
-  const subject = parseNP(tokens, i);
+  // Subject DP/NP.
+  const subject = parseNominal(tokens, 0);
+  let i = subject ? subject.next : 0;
+
+  // Predicate VP (and its auxiliary, which heads T).
+  const predicate = parseVP(tokens, i);
+
+  if (subject && predicate) {
+    i = predicate.next;
+    const tbar = n(
+      "T'",
+      predicate.tWord ? [head('T', predicate.tWord), predicate.node] : [predicate.node],
+    );
+    const tp = n('TP', [subject.node, tbar]);
+    appendLeftovers(tp, tokens, i);
+    return tp;
+  }
+
+  if (predicate) {
+    // Imperative / subjectless clause.
+    i = predicate.next;
+    const tbar = n(
+      "T'",
+      predicate.tWord ? [head('T', predicate.tWord), predicate.node] : [predicate.node],
+    );
+    const tp = n('TP', [tbar]);
+    appendLeftovers(tp, tokens, i);
+    return tp;
+  }
+
   if (subject) {
-    children.push(subject.node);
-    i = subject.next;
+    // A bare nominal with no predicate (a fragment).
+    appendLeftovers(subject.node, tokens, subject.next);
+    return subject.node;
   }
 
-  // Predicate VP.
-  const vp = parseVP(tokens, i);
-  if (vp) {
-    children.push(vp.node);
-    i = vp.next;
-  }
+  // Fallback: attach every word as a leaf under S.
+  return n('S', tokens.map((t) => head(t.pos, t.word)));
+}
 
-  // Anything left over attaches directly to S as a fallback.
-  while (i < tokens.length) {
-    children.push(leaf(tokens[i]));
-    i++;
+function appendLeftovers(parent: TreeNode, tokens: Token[], i: number): void {
+  for (; i < tokens.length; i++) {
+    parent.children = parent.children || [];
+    parent.children.push(head(tokens[i].pos, tokens[i].word));
   }
-
-  return { id: generateId(), name: 'S', children };
 }
 
 export function generateId(): string {
